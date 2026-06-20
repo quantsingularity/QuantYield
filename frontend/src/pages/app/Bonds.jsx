@@ -673,7 +673,8 @@ export default function Bonds() {
                         {b.issuer}
                       </div>
                       <div style={{ fontSize: 10, color: "var(--text-muted)" }}>
-                        {b.coupon_rate * 100}% · {b.maturity_date.slice(0, 7)}
+                        {+(b.coupon_rate * 100).toFixed(4)}% ·{" "}
+                        {b.maturity_date.slice(0, 7)}
                       </div>
                     </td>
                     <td>

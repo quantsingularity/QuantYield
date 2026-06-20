@@ -1,4 +1,4 @@
-import { Outlet, NavLink, useNavigate } from "react-router-dom";
+import { Outlet, NavLink, useNavigate, useLocation } from "react-router-dom";
 import { useState, useEffect } from "react";
 import {
   LayoutDashboard,
@@ -76,6 +76,17 @@ export default function AppLayout() {
   const { user, logout } = useAuth();
   const toast = useToast();
   const navigate = useNavigate();
+  const location = useLocation();
+
+  const PAGE_TITLES = {
+    "/app/dashboard": "Dashboard",
+    "/app/bonds": "Bond Universe",
+    "/app/portfolios": "Portfolios",
+    "/app/curves": "Yield Curves",
+    "/app/analytics": "Analytics",
+    "/app/ml": "ML Models",
+  };
+  const pageTitle = PAGE_TITLES[location.pathname] ?? "";
   const [time, setTime] = useState("");
   const [showUserMenu, setShowUserMenu] = useState(false);
 
@@ -255,7 +266,7 @@ export default function AppLayout() {
         <header className="topbar">
           <div className="topbar-left">
             <div className="topbar-title" id="page-title">
-              <Outlet context={{ setTitle: () => {} }} />
+              {pageTitle}
             </div>
           </div>
 
