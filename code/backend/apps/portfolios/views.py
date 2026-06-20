@@ -144,24 +144,22 @@ class PortfolioViewSet(viewsets.ModelViewSet):
                 krd_agg[str(tenor)] = krd_agg.get(str(tenor), 0.0) + dur * weight
 
         # Sector / rating / maturity allocations
+        # Use the already-resolved bonds list (same order as mv_list) to avoid
+        # a second DB round-trip on every bond and prevent ordering mismatches
+        # that would cause mv_list[mv_idx] to pick the wrong market value.
         sector_alloc: dict = {}
         rating_alloc: dict = {}
         maturity_dist: dict = {}
 
-        for pos in portfolio.positions.select_related("bond"):
-            bond = pos.bond
-            mv_idx = list(portfolio.positions.values_list("bond_id", flat=True)).index(
-                bond.id
-            )
-            mv = mv_list[mv_idx] if mv_idx < len(mv_list) else 0.0
+        for bond_schema, mv in zip(bonds, mv_list):
             w = mv / total_mv if total_mv else 0.0
 
-            sector = bond.sector or "Unknown"
-            rating = bond.credit_rating or "NR"
+            sector = bond_schema.sector or "Unknown"
+            rating = bond_schema.credit_rating or "NR"
             sector_alloc[sector] = sector_alloc.get(sector, 0.0) + w
             rating_alloc[rating] = rating_alloc.get(rating, 0.0) + w
 
-            yrs = (bond.maturity_date - settle).days / 365.0
+            yrs = (bond_schema.maturity_date - settle).days / 365.0
             bucket = (
                 "0-1Y"
                 if yrs <= 1

@@ -1,0 +1,103 @@
+version: "3.9"
+
+services:
+  # ── PostgreSQL ───────────────────────────────────────────────────────────────
+  db:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: quantyield
+      POSTGRES_USER: quantyield
+      POSTGRES_PASSWORD: quantyield_dev
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U quantyield"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # ── Redis ────────────────────────────────────────────────────────────────────
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    command: redis-server --maxmemory 256mb --maxmemory-policy allkeys-lru
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # ── Django API ───────────────────────────────────────────────────────────────
+  # Build context is ./code so the Dockerfile can COPY both backend/ and
+  # ml_services/ into the image (BUG-7 + BUG-8 fix: was `build: .` which
+  # pointed at the project root where no Dockerfile exists, and excluded
+  # ml_services from the image entirely).
+  api:
+    build:
+      context: ./code
+      dockerfile: backend/Dockerfile
+    restart: unless-stopped
+    environment:
+      DJANGO_SETTINGS_MODULE: quantyield.settings.production
+      SECRET_KEY: ${SECRET_KEY:-django-insecure-docker-dev-key-change-me}
+      DEBUG: "False"
+      DATABASE_URL: postgres://quantyield:quantyield_dev@db:5432/quantyield
+      CACHE_URL: redis://redis:6379/1
+      CORS_ALLOWED_ORIGINS: ${CORS_ALLOWED_ORIGINS:-http://localhost}
+      FRED_API_KEY: ${FRED_API_KEY:-}
+      CURVE_CACHE_TTL: "300"
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    volumes:
+      - static_files:/code/backend/staticfiles
+    command: >
+      sh -c "
+        python manage.py migrate --noinput &&
+        python manage.py seed_data &&
+        uvicorn quantyield.asgi:application --host 0.0.0.0 --port 8000 --workers 4
+      "
+
+  # ── React Frontend builder ───────────────────────────────────────────────────
+  # Runs `npm ci && npm run build` and places the compiled SPA into the
+  # frontend_dist volume which nginx then serves.  restart: "no" means the
+  # container exits after the build and is not restarted.
+  # VITE_API_BASE is set to /api/v1 so all API calls route through nginx
+  # rather than directly to port 8000 (which is not exposed externally).
+  frontend:
+    image: node:20-alpine
+    working_dir: /app
+    volumes:
+      - ./frontend:/app
+      - frontend_dist:/app/dist
+      - /app/node_modules
+    environment:
+      VITE_API_BASE: /api/v1
+    command: sh -c "npm ci && npm run build"
+    restart: "no"
+
+  # ── Nginx ────────────────────────────────────────────────────────────────────
+  # Serves the React SPA (frontend_dist) and proxies /api/ and /static/ to
+  # the Django container.  Depends on frontend so the dist is ready before
+  # nginx starts (though nginx serves whatever is in the volume; the build
+  # runs synchronously before nginx receives traffic).
+  nginx:
+    image: nginx:1.25-alpine
+    restart: unless-stopped
+    ports:
+      - "80:80"
+    volumes:
+      - ./nginx.conf:/etc/nginx/conf.d/default.conf:ro
+      - static_files:/staticfiles:ro
+      - frontend_dist:/usr/share/nginx/html:ro
+    depends_on:
+      - api
+      - frontend
+
+volumes:
+  postgres_data:
+  static_files:
+  frontend_dist:

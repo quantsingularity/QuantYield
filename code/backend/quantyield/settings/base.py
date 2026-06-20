@@ -174,6 +174,19 @@ SPECTACULAR_SETTINGS = {
 CORS_ALLOWED_ORIGINS = env("CORS_ALLOWED_ORIGINS")
 CORS_ALLOW_CREDENTIALS = True
 
+# ── Simple JWT ────────────────────────────────────────────────────────────────
+from datetime import timedelta  # noqa: E402
+
+SIMPLE_JWT = {
+    # Access tokens are valid for 24 hours -- long enough for normal dev/demo
+    # use without requiring a refresh flow to be wired up on day one.
+    # Tighten to 15 minutes once the frontend implements silent refresh.
+    "ACCESS_TOKEN_LIFETIME": timedelta(hours=24),
+    "REFRESH_TOKEN_LIFETIME": timedelta(days=7),
+    "ROTATE_REFRESH_TOKENS": True,
+    "AUTH_HEADER_TYPES": ("Bearer",),
+}
+
 # ── QuantYield-specific settings ────────────────────────────────────────────────
 FRED_API_KEY: str = env("FRED_API_KEY")
 CURVE_CACHE_TTL: int = env("CURVE_CACHE_TTL")

@@ -255,7 +255,7 @@ class YieldCurveViewSet(viewsets.ModelViewSet):
 
     @action(detail=True, methods=["post"], url_path="forecast")
     def forecast(self, request, pk=None):
-        self.get_object()  # validate curve exists
+        curve = self.get_object()  # validate exists and cache for response
         ser = CurveForecastSerializer(data=request.data)
         ser.is_valid(raise_exception=True)
         data = ser.validated_data
@@ -289,7 +289,7 @@ class YieldCurveViewSet(viewsets.ModelViewSet):
 
         return Response(
             {
-                "curve_id": str(self.get_object().id),
+                "curve_id": str(curve.id),
                 "horizon_days": horizon_days,
                 "forecast_dates": forecast_dates,
                 "forecast_rates": forecast_by_tenor,
